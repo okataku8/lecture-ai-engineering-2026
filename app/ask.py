@@ -14,6 +14,7 @@ import argparse
 
 from google import genai
 from google.genai import errors
+from google.genai.chats import Chat
 
 from app.config import MODEL, api_error_message, get_api_key
 
@@ -21,9 +22,8 @@ from app.config import MODEL, api_error_message, get_api_key
 DEFAULT_QUESTION = "AIE2026の講座の宿題にある「3レベル」とは何ですか？"
 
 
-def ask(question: str) -> str:
-    client = genai.Client(api_key=get_api_key())
-    response = client.models.generate_content(model=MODEL, contents=question)
+def ask(chat: Chat, question: str) -> str:
+    response = chat.send_message(question)
 
     # TODO(第1回 演習): response.usage_metadata から
     #   入力トークン数と出力トークン数を表示してみよう（Copilotに頼んでよい）
@@ -33,7 +33,9 @@ def ask(question: str) -> str:
     else:
         input_tokens = usage.prompt_token_count
         output_tokens = usage.candidates_token_count
+        print("\n--- トークン数 ---\n")
         print(f"[トークン数] 入力: {input_tokens}, 出力: {output_tokens}")
+        print("\n------------------\n")
 
     return response.text
 
@@ -44,13 +46,22 @@ def main() -> None:
     args = parser.parse_args()
 
     print(f"[model] {MODEL}")
-    print(f"[質問] {args.question}\n")
-    try:
-        print(ask(args.question))
-    except errors.APIError as e:
-        print(api_error_message(e.code, e.message))
-        raise SystemExit(1)
 
+    client = genai.Client(api_key=get_api_key())
+    chat = client.chats.create(model=MODEL)
+
+    question = args.question
+    while True:
+        print(f"[質問] {question}\n")
+        try:
+            print(ask(chat, question))
+        except errors.APIError as e:
+            print(api_error_message(e.code, e.message))
+            raise SystemExit(1)
+
+        question = input("\n次の質問（終了するには「終了」）: ").strip()
+        if question.lower() in {"終了", "exit", "quit"}:
+            break
 
 if __name__ == "__main__":
     main()

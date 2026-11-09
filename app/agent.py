@@ -16,7 +16,7 @@ import inspect
 import json
 from pathlib import Path
 
-from pydantic_ai import Agent
+from pydantic_ai import Agent, DeferredToolRequests
 from pydantic_ai.exceptions import ModelHTTPError
 from fastmcp import Client
 from pydantic_ai.mcp import MCPToolset, StdioTransport
@@ -38,9 +38,10 @@ INSTRUCTIONS = """\
 """
 
 # モデルは実行時に渡す（テストではAPIを呼ばない TestModel に差し替えるため）
-agent = Agent(instructions=INSTRUCTIONS)
+agent = Agent(instructions=INSTRUCTIONS, output_type=[str, DeferredToolRequests])
 agent.tool_plain(tools.search_glossary)
 agent.tool_plain(tools.get_lecture_summary)
+agent.tool_plain(requires_approval=True)(tools.save_learning_log)
 
 # TODO(第3回 演習): tools.py に make_quiz を作り、ここで登録しよう
 
@@ -127,8 +128,27 @@ def main() -> None:
     print(f"[model] {MODEL}")
     if args.mcp:
         print("[tools] MCP サーバー（app/mcp_servers.json）")
+
+    model = build_model()
+
     try:
-        result = target.run_sync(args.question, model=build_model())
+        result = target.run_sync(args.question, model=model)
+        while isinstance(result.output, DeferredToolRequests):
+            requests = result.output
+            approvals = {}
+
+            for call in requests.approvals:
+                print(f"\n承認が必要です: {call.tool_name}")
+                print(json.dumps(call.args, ensure_ascii=False, indent=2))
+                answer = input("実行を許可しますか？ [y/N]: ").strip().lower()
+                approvals[call.tool_call_id] = answer in {"y", "yes"}
+
+            result = target.run_sync(
+                message_history=result.all_messages(),
+                deferred_tool_results=requests.build_results(approvals=approvals),
+                model=model,
+            )
+
     except ModelHTTPError as e:
         print(api_error_message(e.status_code, str(e.body)[:200]))
         raise SystemExit(1)

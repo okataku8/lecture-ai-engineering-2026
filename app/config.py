@@ -5,6 +5,9 @@ APIキーやモデル名はコードに書かず、環境変数から読み込�
 
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # 既定モデル。環境変数 AIE_MODEL を設定すると切り替えられる。
 #   例: export AIE_MODEL=gemini-3.5-flash
 DEFAULT_MODEL = "gemini-3.5-flash-lite"

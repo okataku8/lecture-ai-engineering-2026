@@ -5,6 +5,7 @@
 """
 
 import json
+import random
 from functools import cache
 from pathlib import Path
 
@@ -77,3 +78,33 @@ def get_lecture_summary(lecture: int) -> str:
         available = sorted(p.stem for p in (DATA_DIR / "lectures").glob("*.md"))
         return f"第{lecture}回の要点はまだありません。用意されている回: {', '.join(available)}"
     return path.read_text(encoding="utf-8")
+
+
+def make_quiz(lecture: int) -> str:
+    """指定した回の用語について、学習内容の理解を確認したいときに使う。
+
+    lecture は対象の回（1始まりの整数）。
+    """
+    terms = [term for term in load_glossary() if term["lecture"] == lecture]
+    if not terms:
+        return f"第{lecture}回の用語が用語集に見つからないため、クイズを作成できません。"
+
+    term = random.choice(terms)
+    return json.dumps(
+        {
+            "question": f"{term['term']}の意味は？",
+            "answer": term["definition"],
+        },
+        ensure_ascii=False,
+    )
+
+
+def save_learning_log(log_entry: dict) -> None:
+    """学習ログを JSON Lines 形式で保存する。
+
+    log_entry は辞書で、少なくとも "timestamp" と "event" を含むこと。
+    """
+    log_path = DATA_DIR / "learning_log.jsonl"
+    with open(log_path, "a", encoding="utf-8") as f:
+        json.dump(log_entry, f, ensure_ascii=False)
+        f.write("\n")
